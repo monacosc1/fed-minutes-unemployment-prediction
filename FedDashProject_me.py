@@ -489,6 +489,7 @@ import io
 import base64
 # app = dash.Dash(__name__)
 app = Dash(__name__)
+server = app.server
 import os
 app.layout = html.Div(style={'backgroundColor': 'white', 'padding': '20px'}, children=[
     html.H1(
