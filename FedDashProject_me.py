@@ -326,9 +326,12 @@ import re
 import xgboost as xgb
 from sklearn.metrics import mean_absolute_percentage_error as mape
 from tqdm import tqdm
-import dash
-import dash_core_components as dcc
-import dash_html_components as html
+# import dash
+from dash import Dash
+from dash import dcc
+# import dash_core_components as dcc
+# import dash_html_components as html
+from dash import html
 from dash.dependencies import Input, Output, State
 import nltk
 from nltk.corpus import stopwords
@@ -484,7 +487,8 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import io
 import base64
-app = dash.Dash(__name__)
+# app = dash.Dash(__name__)
+app = Dash(__name__)
 import os
 app.layout = html.Div(style={'backgroundColor': 'white', 'padding': '20px'}, children=[
     html.H1(
