@@ -15,8 +15,24 @@ from urllib.parse import urljoin
 import pandas as pd
 import re
 
+# Existing import statements...
+import logging
+
+# Set up basic logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+
 def scrape_93to95(url):
+    logging.info(f"Scraping data from URL: {url}")
     response = requests.get(url)
+    if response.status_code != 200:
+        logging.error(f"Failed to fetch data from URL: {url} with status code: {response.status_code}")
+
     soup = BeautifulSoup(response.content, "html.parser")
 
     # Find all <p> tags within the relevant <div> or other elements unique to the 1993 version
@@ -40,6 +56,7 @@ def scrape_93to95(url):
     url_text = ' '.join([p_tag.get_text().replace('\n', ' ').replace('\r', '') for p_tag in p_tags])
     return url_text, date
 def scrape_1996to2007(url):
+    logging.info(f"Scraping data from URL: {url}")
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
 
@@ -62,6 +79,7 @@ def scrape_1996to2007(url):
     else:
         return None,date
 def scrape_2007to2011(url):
+    logging.info(f"Scraping data from URL: {url}")
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
     # Find all <p> tags on the page
@@ -71,6 +89,7 @@ def scrape_2007to2011(url):
 
     return url_text,date
 def scrape_2012to2017(url):
+    logging.info(f"Scraping data from URL: {url}")
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
     date = url[-12:-4]
@@ -93,6 +112,7 @@ def scrape_2012to2017(url):
         return None,date
 
 def find_minutes_urls1(main_url):
+    logging.info(f"Fetching main page: {main_url}")
     # Send an HTTP GET request to the main page
     response = requests.get(main_url)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -129,6 +149,7 @@ def find_minutes_urls1(main_url):
         minutes_urls.reverse()
     return minutes_urls
 def find_minutes_urls2(main_url):
+    logging.info(f"Fetching main page: {main_url}")
     # Send an HTTP GET request to the main page
     response = requests.get(main_url)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -179,6 +200,7 @@ def find_minutes_urls2(main_url):
     ]
     return minutes_urls
 def find_minutes_urls3(main_url):
+    logging.info(f"Fetching main page: {main_url}")
     # Send an HTTP GET request to the main page
     response = requests.get(main_url)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -214,6 +236,7 @@ def find_minutes_urls3(main_url):
     minutes_urls.reverse()
     return minutes_urls
 def find_minutes_urls4(main_url):
+    logging.info(f"Fetching main page: {main_url}")
     # Send an HTTP GET request to the main page
     response = requests.get(main_url)
     soup = BeautifulSoup(response.content, "html.parser")
@@ -253,6 +276,7 @@ def find_minutes_urls4(main_url):
 # Replace with the actual URL of the main page
 
 def find_minutes_urls_after_2017(main_url):
+    logging.info(f"Fetching main page: {main_url}")
     response = requests.get(main_url)
     soup = BeautifulSoup(response.content, "html.parser")
 
@@ -536,15 +560,21 @@ app.layout = html.Div(style={'backgroundColor': 'white', 'padding': '20px'}, chi
 )
 
 def update_output(n_clicks, date_input, text_input):
+    logging.info("Received callback with inputs: date_input=%s, text_input=%s", date_input, text_input)
     output = html.Div('Performing some operation...')
     if n_clicks is not None:
+        logging.info("Processing new input...")
         new_input = pd.DataFrame({"Date": [date_input], "Text": [text_input]})
         global df  # Declare df as a global variable to update it
         df = initial_preprocesser(df)
+        logging.info("Initial preprocessing completed.")
         df2 = pd.concat([df, new_input], ignore_index=True)
         df2 = second_preprocessor(df2)
+        logging.info("Second preprocessing completed.")
         df2 = word_magician(df2)
+        logging.info("Word magician function completed.")
         df2 = feature_engineering_func(df2)
+        logging.info("Feature engineering completed.")
         df2.fillna(0, inplace = True)
 
         train = df2[:-1]
@@ -564,6 +594,7 @@ def update_output(n_clicks, date_input, text_input):
         )
         model.fit(X, y)
         preds = model.predict(test_real)[0]
+        logging.info("Model prediction complete. Prediction: %s", preds)
         preds = str(preds)[:4]
         df2.loc[(df2.date == date_input), "target"] = float(preds)
         df2["fed_minutes_released_date"] = df2.year.astype(str) + "/" + df2.month.astype(str)
@@ -582,6 +613,7 @@ print("selamun aleykum")
 n_clicks = None
 """### Link"""
 
+logging.info("Starting Dash app...")
 if __name__ == '__main__':
     app.run(host=os.getenv('IP', '0.0.0.0'),
             port=int(os.getenv('PORT', 4000)), jupyter_mode= "external")
