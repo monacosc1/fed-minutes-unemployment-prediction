@@ -457,16 +457,43 @@ def word_magician(df):
     punct = list(string.punctuation)
     punct.extend(["''", ":", "...", "@", '""'])
     
-    logging.info("Calculating basic text features.")
-    df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
-    df["num_unique_words"] = df["text"].apply(lambda x: len(set(str(x).split())))
-    df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
-    df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in stops]))
-    df["num_punctuations"] = df['text'].apply(lambda x: len([c for c in str(x) if c in string.punctuation]))
-    df["num_words_upper"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.isupper()]))
-    df["num_words_title"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.istitle()]))
-    df["mean_word_len"] = df["text"].apply(lambda x: np.mean([len(w) for w in str(x).split()]))
-    
+    try:
+        logging.info("Calculating number of words.")
+        df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
+        logging.info("Number of words calculated.")
+        
+        logging.info("Calculating number of unique words.")
+        df["num_unique_words"] = df["text"].apply(lambda x: len(set(str(x).split())))
+        logging.info("Number of unique words calculated.")
+        
+        logging.info("Calculating number of characters.")
+        df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
+        logging.info("Number of characters calculated.")
+        
+        logging.info("Calculating number of stopwords.")
+        df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in stops]))
+        logging.info("Number of stopwords calculated.")
+        
+        logging.info("Calculating number of punctuations.")
+        df["num_punctuations"] = df['text'].apply(lambda x: len([c for c in str(x) if c in string.punctuation]))
+        logging.info("Number of punctuations calculated.")
+        
+        logging.info("Calculating number of words in uppercase.")
+        df["num_words_upper"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.isupper()]))
+        logging.info("Number of words in uppercase calculated.")
+        
+        logging.info("Calculating number of words in title case.")
+        df["num_words_title"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.istitle()]))
+        logging.info("Number of words in title case calculated.")
+        
+        logging.info("Calculating mean word length.")
+        df["mean_word_len"] = df["text"].apply(lambda x: np.mean([len(w) for w in str(x).split()]))
+        logging.info("Mean word length calculated.")
+        
+    except Exception as e:
+        logging.error("Error during basic text feature calculation: %s", str(e))
+        raise
+
     logging.info("Removing null rows.")
     df = df.drop(df.loc[(df.num_words == 0)].index).reset_index(drop=True)
     
@@ -486,6 +513,7 @@ def word_magician(df):
     
     logging.info("Completed word_magician function.")
     return df
+
 
 
 # def word_magician(df):
