@@ -449,35 +449,75 @@ def second_preprocessor(data):
     return data
 
 def word_magician(df):
+    logging.info("Starting word_magician function.")
+    
     stops = ['the','a','an','and','but','if','or','because','as','what','which','this','that','these','those','then',
-                  'just','so','than','such','both','through','about','for','is','of','while','during','to','What','Which',
-                  'Is','If','While','This']
-    punct = list(string.punctuation); punct.append("''"); punct.append(":"); punct.append("..."); punct.append("@")
-    punct.append('""')
+             'just','so','than','such','both','through','about','for','is','of','while','during','to','What','Which',
+             'Is','If','While','This']
+    punct = list(string.punctuation)
+    punct.extend(["''", ":", "...", "@", '""'])
+    
+    logging.info("Calculating basic text features.")
     df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
     df["num_unique_words"] = df["text"].apply(lambda x: len(set(str(x).split())))
     df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
     df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in stops]))
-    df["num_punctuations"] =df['text'].apply(lambda x: len([c for c in str(x) if c in string.punctuation]) )
+    df["num_punctuations"] = df['text'].apply(lambda x: len([c for c in str(x) if c in string.punctuation]))
     df["num_words_upper"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.isupper()]))
     df["num_words_title"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.istitle()]))
     df["mean_word_len"] = df["text"].apply(lambda x: np.mean([len(w) for w in str(x).split()]))
-    df = df.drop(df.loc[(df.num_words == 0)].index).reset_index(drop = True) # removing null rows
-    keywords= ["inflation", "recession", "risk"]
+    
+    logging.info("Removing null rows.")
+    df = df.drop(df.loc[(df.num_words == 0)].index).reset_index(drop=True)
+    
+    keywords = ["inflation", "recession", "risk"]
     keyword_counts = {keyword: [] for keyword in keywords}
-
-    # Iterate through the DataFrame
+    
+    logging.info("Counting keyword occurrences.")
     for index, row in tqdm(df.iterrows()):
         text = row["text"]
-
-        # Count occurrences of each keyword in the text text
         for keyword in keywords:
             keyword_count = text.lower().count(keyword)
             keyword_counts[keyword].append(keyword_count)
-    # Add the keyword counts to the DataFrame
+    
+    logging.info("Adding keyword counts to the DataFrame.")
     for keyword in keywords:
         df[keyword] = keyword_counts[keyword]
+    
+    logging.info("Completed word_magician function.")
     return df
+
+
+# def word_magician(df):
+#     stops = ['the','a','an','and','but','if','or','because','as','what','which','this','that','these','those','then',
+#                   'just','so','than','such','both','through','about','for','is','of','while','during','to','What','Which',
+#                   'Is','If','While','This']
+#     punct = list(string.punctuation); punct.append("''"); punct.append(":"); punct.append("..."); punct.append("@")
+#     punct.append('""')
+#     df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
+#     df["num_unique_words"] = df["text"].apply(lambda x: len(set(str(x).split())))
+#     df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
+#     df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in stops]))
+#     df["num_punctuations"] =df['text'].apply(lambda x: len([c for c in str(x) if c in string.punctuation]) )
+#     df["num_words_upper"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.isupper()]))
+#     df["num_words_title"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.istitle()]))
+#     df["mean_word_len"] = df["text"].apply(lambda x: np.mean([len(w) for w in str(x).split()]))
+#     df = df.drop(df.loc[(df.num_words == 0)].index).reset_index(drop = True) # removing null rows
+#     keywords= ["inflation", "recession", "risk"]
+#     keyword_counts = {keyword: [] for keyword in keywords}
+
+#     # Iterate through the DataFrame
+#     for index, row in tqdm(df.iterrows()):
+#         text = row["text"]
+
+#         # Count occurrences of each keyword in the text text
+#         for keyword in keywords:
+#             keyword_count = text.lower().count(keyword)
+#             keyword_counts[keyword].append(keyword_count)
+#     # Add the keyword counts to the DataFrame
+#     for keyword in keywords:
+#         df[keyword] = keyword_counts[keyword]
+#     return df
 
 def feature_engineering_func(df):
     def get_textBlob_score(sent):
