@@ -399,6 +399,7 @@ import multiprocessing
 import xgboost as xgb
 from sklearn.metrics import mean_absolute_percentage_error as mape
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 """### Preprocessing & Custom Functions"""
 
@@ -451,51 +452,49 @@ def second_preprocessor(data):
     data.columns = ["text", "date", "year", "month", "unrate"]
     return data
 
-def calculate_features(row):
-    stops = set(['the', 'a', 'an', 'and', 'but', 'if', 'or', 'because', 'as', 'what', 'which', 'this', 'that', 'these',
-                 'those', 'then', 'just', 'so', 'than', 'such', 'both', 'through', 'about', 'for', 'is', 'of', 'while',
-                 'during', 'to', 'What', 'Which', 'Is', 'If', 'While', 'This'])
-    
-    punct = set(string.punctuation)
-    
-    num_words = len(row.split())
-    num_unique_words = len(set(row.split()))
-    num_chars = len(row)
-    num_stopwords = len([w for w in row.lower().split() if w in stops])
-    num_punctuations = len([c for c in row if c in punct])
-    num_words_upper = len([w for w in row.split() if w.isupper()])
-    num_words_title = len([w for w in row.split() if w.istitle()])
-    mean_word_len = np.mean([len(w) for w in row.split()])
-    
-    return (num_words, num_unique_words, num_chars, num_stopwords, num_punctuations, num_words_upper, num_words_title, mean_word_len)
-
-def word_magician(df):
-    logging.info("Starting word_magician function.")
-    
-    # Parallel processing
-    logging.info("Calculating text features in parallel.")
-    num_cores = multiprocessing.cpu_count()
-    results = Parallel(n_jobs=num_cores)(delayed(calculate_features)(row) for row in df['text'])
-    
-    # Assign results back to DataFrame
-    df[['num_words', 'num_unique_words', 'num_chars', 'num_stopwords', 'num_punctuations',
-        'num_words_upper', 'num_words_title', 'mean_word_len']] = pd.DataFrame(results)
-    
-    # Remove null rows
-    logging.info("Removing null rows.")
-    df = df.drop(df.loc[(df.num_words == 0)].index).reset_index(drop=True)
-    
-    # Use CountVectorizer for keyword counting
-    logging.info("Counting keyword occurrences using CountVectorizer.")
+def word_magician(df, batch_size=50):
+    # Define a reduced set of stopwords and keywords
+    stops = ['the', 'a', 'and', 'is', 'of', 'to', 'for']
     keywords = ["inflation", "recession", "risk"]
-    vectorizer = CountVectorizer(vocabulary=keywords)
+
+    # Initialize columns for text features
+    df["num_words"] = np.nan
+    df["num_unique_words"] = np.nan
+    df["num_chars"] = np.nan
+    df["num_stopwords"] = np.nan
+    df["num_punctuations"] = np.nan
+    df["num_words_upper"] = np.nan
+    df["mean_word_len"] = np.nan
+    df["inflation"] = np.nan
+    df["recession"] = np.nan
+    df["risk"] = np.nan
+
+    def process_batch(batch):
+        for index, row in batch.iterrows():
+            text = str(row["text"])
+            df.at[index, "num_words"] = len(text.split())
+            df.at[index, "num_unique_words"] = len(set(text.split()))
+            df.at[index, "num_chars"] = len(text)
+            df.at[index, "num_stopwords"] = len([w for w in text.lower().split() if w in stops])
+            df.at[index, "num_punctuations"] = len([c for c in text if c in string.punctuation])
+            df.at[index, "num_words_upper"] = len([w for w in text.split() if w.isupper()])
+            df.at[index, "mean_word_len"] = np.mean([len(w) for w in text.split()]) if len(text.split()) > 0 else 0
+
+            # Count occurrences of each keyword
+            for keyword in keywords:
+                df.at[index, keyword] = text.lower().count(keyword)
+
+    # Process the dataframe in batches
+    logging.info("Processing text features in batches.")
+    for i in range(0, len(df), batch_size):
+        batch = df.iloc[i:i + batch_size]
+        with ThreadPoolExecutor() as executor:
+            executor.submit(process_batch, batch)
+
+    # Drop rows where num_words is 0 (after processing)
+    df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
     
-    keyword_counts = vectorizer.fit_transform(df['text'].str.lower()).toarray()
-    keyword_counts_df = pd.DataFrame(keyword_counts, columns=keywords)
-    
-    df = pd.concat([df, keyword_counts_df], axis=1)
-    
-    logging.info("Completed word_magician function.")
+    logging.info("Batch processing completed.")
     return df
 
 # def word_magician(df):
