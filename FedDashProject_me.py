@@ -392,6 +392,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import NMF, LatentDirichletAllocation
 from matplotlib import pyplot as plt
 from sklearn.feature_extraction.text import CountVectorizer
+from joblib import Parallel, delayed
+import multiprocessing
 # %matplotlib inline
 
 import xgboost as xgb
@@ -449,44 +451,41 @@ def second_preprocessor(data):
     data.columns = ["text", "date", "year", "month", "unrate"]
     return data
 
+def calculate_features(row):
+    stops = set(['the', 'a', 'an', 'and', 'but', 'if', 'or', 'because', 'as', 'what', 'which', 'this', 'that', 'these',
+                 'those', 'then', 'just', 'so', 'than', 'such', 'both', 'through', 'about', 'for', 'is', 'of', 'while',
+                 'during', 'to', 'What', 'Which', 'Is', 'If', 'While', 'This'])
+    
+    punct = set(string.punctuation)
+    
+    num_words = len(row.split())
+    num_unique_words = len(set(row.split()))
+    num_chars = len(row)
+    num_stopwords = len([w for w in row.lower().split() if w in stops])
+    num_punctuations = len([c for c in row if c in punct])
+    num_words_upper = len([w for w in row.split() if w.isupper()])
+    num_words_title = len([w for w in row.split() if w.istitle()])
+    mean_word_len = np.mean([len(w) for w in row.split()])
+    
+    return (num_words, num_unique_words, num_chars, num_stopwords, num_punctuations, num_words_upper, num_words_title, mean_word_len)
+
 def word_magician(df):
     logging.info("Starting word_magician function.")
     
-    stops = ['the','a','an','and','but','if','or','because','as','what','which','this','that','these','those','then',
-             'just','so','than','such','both','through','about','for','is','of','while','during','to','What','Which',
-             'Is','If','While','This']
-    punct = list(string.punctuation)
-    punct.extend(["''", ":", "...", "@", '""'])
+    # Parallel processing
+    logging.info("Calculating text features in parallel.")
+    num_cores = multiprocessing.cpu_count()
+    results = Parallel(n_jobs=num_cores)(delayed(calculate_features)(row) for row in df['text'])
     
-    # Calculating basic text features
-    logging.info("Calculating number of words.")
-    df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
+    # Assign results back to DataFrame
+    df[['num_words', 'num_unique_words', 'num_chars', 'num_stopwords', 'num_punctuations',
+        'num_words_upper', 'num_words_title', 'mean_word_len']] = pd.DataFrame(results)
     
-    logging.info("Calculating number of unique words.")
-    df["num_unique_words"] = df["text"].apply(lambda x: len(set(str(x).split())))
-    
-    logging.info("Calculating number of characters.")
-    df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
-    
-    logging.info("Calculating number of stopwords.")
-    df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in stops]))
-    
-    logging.info("Calculating number of punctuations.")
-    df["num_punctuations"] = df['text'].apply(lambda x: len([c for c in str(x) if c in string.punctuation]))
-    
-    logging.info("Calculating number of words in uppercase.")
-    df["num_words_upper"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.isupper()]))
-    
-    logging.info("Calculating number of words in title case.")
-    df["num_words_title"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.istitle()]))
-    
-    logging.info("Calculating mean word length.")
-    df["mean_word_len"] = df["text"].apply(lambda x: np.mean([len(w) for w in str(x).split()]))
-    
+    # Remove null rows
     logging.info("Removing null rows.")
     df = df.drop(df.loc[(df.num_words == 0)].index).reset_index(drop=True)
     
-    # Optimized keyword counting using CountVectorizer
+    # Use CountVectorizer for keyword counting
     logging.info("Counting keyword occurrences using CountVectorizer.")
     keywords = ["inflation", "recession", "risk"]
     vectorizer = CountVectorizer(vocabulary=keywords)
@@ -498,7 +497,6 @@ def word_magician(df):
     
     logging.info("Completed word_magician function.")
     return df
-
 
 # def word_magician(df):
 #     stops = ['the','a','an','and','but','if','or','because','as','what','which','this','that','these','those','then',
