@@ -1,84 +1,73 @@
-import pandas as pd
 import streamlit as st
-import plotly.express as px
-from sklearn.linear_model import LinearRegression
+import pandas as pd
+import numpy as np
 import logging
+from sklearn.linear_model import LinearRegression
+import plotly.express as px
 
-# Setup logging
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Load data
-df = pd.read_csv("./data/scraped_data_all_years_true.csv")
-
-# Define the functions (assuming they are defined elsewhere in your script)
-def initial_preprocesser(file_path):
+# Initial data loading function
+def initial_preprocesser(csv_file_path):
     try:
-        # Load data
-        data = pd.read_csv(file_path)
-        
-        # Ensure 'Date' and 'Text' columns exist
-        if 'Date' not in data.columns or 'Text' not in data.columns:
-            raise ValueError("The CSV file must contain 'Date' and 'Text' columns.")
-        
-        # Clean the 'Date' and 'Text' columns
-        data['Date'] = data['Date'].apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
-        data['Text'] = data['Text'].apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
-        
-        # Fix any ordering issues if needed
+        data = pd.read_csv(csv_file_path)
+        data.Date = data.Date.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+        data.Text = data.Text.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
         normal = data[24:]
         need_to_reverse = data[:24]
         need_to_reverse.columns = ["Text", "Date"]
         need_to_reverse = need_to_reverse[["Text", "Date"]]
         data = pd.concat([need_to_reverse, normal], ignore_index=True)
-        
         return data
-
-    except pd.errors.EmptyDataError:
-        raise ValueError("No columns to parse from file. The CSV file might be empty or corrupted.")
-    except FileNotFoundError:
-        raise ValueError(f"The file {file_path} was not found.")
     except Exception as e:
-        raise ValueError(f"An error occurred while processing the CSV file: {str(e)}")
+        raise ValueError(f"Error during initial preprocessing: {str(e)}")
 
+# Second preprocessing function
 def second_preprocessor(data):
-    url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
+    url = "./data/UNRATE.csv"
     unrates = pd.read_csv(url)
 
-    # Convert date columns to datetime
     data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
     unrates['DATE'] = pd.to_datetime(unrates['DATE'], errors='coerce')
 
-    # Extract year and month from dates
     unrates['year'] = unrates['DATE'].dt.year
     unrates['month'] = unrates['DATE'].dt.month
-
-    # Sort and shift UNRATE
     unrates = unrates.sort_values('DATE').reset_index(drop=True)
     unrates['UNRATE'] = unrates['UNRATE'].shift(-1)
 
-    # Merge with the main dataset
     data['year'] = data['Date'].dt.year
     data['month'] = data['Date'].dt.month
     data = data.sort_values('Date').reset_index(drop=True)
 
-    # Ensure no duplicate columns after merge
     data = data.merge(unrates[['year', 'month', 'UNRATE']], on=['year', 'month'], how='left')
 
-    # Rename the columns properly after merging
     data.rename(columns={
         'Text': 'text',
         'Date': 'date',
         'UNRATE': 'unrate'
     }, inplace=True)
 
-    # If you still have extra columns, consider dropping them here
     data = data[['text', 'date', 'year', 'month', 'unrate']]
 
     return data
 
+# Word magician function
+def word_magician(df):
+    df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
+    df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
+    df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in ['the', 'a', 'and', 'is', 'of', 'to', 'for']]))
+    df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
+    return df
 
-
-
+# Feature engineering function
+def feature_engineering_func(df):
+    df = df.rename(columns={"unrate": "target"})
+    df["target_shift1"] = df.target.shift(1)
+    df["target_shift2"] = df.target.shift(2)
+    df["target_shift3"] = df.target.shift(3)
+    df = df.dropna().reset_index(drop=True)
+    return df
 
 # Main Script
 st.title('Unemployment Rate Predictor')
@@ -132,7 +121,7 @@ if st.button('Submit'):
         st.plotly_chart(fig)
 
 
-        
+
 # import pandas as pd
 # import streamlit as st
 # import logging
