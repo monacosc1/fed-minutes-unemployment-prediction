@@ -450,6 +450,7 @@ def feature_engineering_func(df):
 
 """### Plotly Object"""
 
+import plotly.express as px  # Ensure plotly.express is imported
 app = Dash(__name__)
 server = app.server
 import os
