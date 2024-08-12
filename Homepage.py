@@ -113,12 +113,13 @@ if st.button('Submit'):
         df = df.sort_values("date").reset_index(drop=True)
         
         # Plot the last 10 data points plus the prediction
-        df_temp = df[-10:].append(df.iloc[-1])  # Include the new prediction
+        df_temp = pd.concat([df[-10:], df.iloc[[-1]]])  # Include the new prediction
         df_temp = df_temp.rename(columns={"target": "unemployment_rate_of_next_month"})
         fig = px.bar(df_temp, x="fed_minutes_released_date", y="unemployment_rate_of_next_month")
 
         st.write(f'Unemployment rate prediction for next month is: {preds:.2f}%')
         st.plotly_chart(fig)
+
 
 
 
