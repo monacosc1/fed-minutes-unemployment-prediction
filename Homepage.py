@@ -25,7 +25,7 @@ def initial_preprocesser(csv_file_path):
 
 # Second preprocessing function
 def second_preprocessor(data):
-    url = "./data/UNRATE.csv"
+    url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
     unrates = pd.read_csv(url)
 
     data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
