@@ -404,37 +404,20 @@ from concurrent.futures import ThreadPoolExecutor
 """### Preprocessing & Custom Functions"""
 
 def initial_preprocesser(data):
-  data = pd.read_csv("./data/scraped_data_all_years_true.csv")
-  data.Date = data.Date.apply(lambda x : str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
-  data.Text = data.Text.apply(lambda x : str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
-  normal = data[24:]
-  need_to_reverse = data[:24]
-  need_to_reverse.columns = ["Text", "Date"]
-  need_to_reverse = need_to_reverse[["Text", "Date"]]
-
-  data = pd.concat([need_to_reverse, normal], ignore_index= True)
-  return data
-
-# def second_preprocessor(data):
-#     unrates= pd.read_csv("./data/UNRATE-2.csv")
-#     unrates.UNRATE = unrates.UNRATE.shift(-1)
-#     unrates["DATE"] = pd.to_datetime(unrates["DATE"])
-#     unrates["year"] = unrates.DATE.dt.year
-#     unrates["month"] = unrates.DATE.dt.month
-#     unrates = unrates.sort_values("DATE").reset_index(drop = True)
-#     unrates.drop(["DATE"], axis=1, inplace = True)
-#     data["Date"] = pd.to_datetime(data.Date)
-#     data["year"] = data.Date.dt.year
-#     data["month"] = data.Date.dt.month
-#     data = data.sort_values("Date").reset_index(drop = True)
-#     data= data.merge(unrates, on = ["year", "month"], how = "left")
-#     data.columns = ["text", "date", "year", "month", "unrate"]
-#     return data
+    data = pd.read_csv("./data/scraped_data_all_years_true.csv")
+    data.Date = data.Date.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+    data.Text = data.Text.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+    normal = data[24:]
+    need_to_reverse = data[:24]
+    need_to_reverse.columns = ["Text", "Date"]
+    need_to_reverse = need_to_reverse[["Text", "Date"]]
+    data = pd.concat([need_to_reverse, normal], ignore_index=True)
+    return data
 
 def second_preprocessor(data):
     # FRED API URL for unemployment rate data (UNRATE)
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
-    # # Reading the data directly from the URL
+    # Reading the data directly from the URL
     unrates = pd.read_csv(url)
     
     unrates.UNRATE = unrates.UNRATE.shift(-1)
@@ -442,7 +425,7 @@ def second_preprocessor(data):
     unrates["year"] = unrates.DATE.dt.year
     unrates["month"] = unrates.DATE.dt.month
     unrates = unrates.sort_values("DATE").reset_index(drop=True)
-    unrates.drop(["DATE"], axis=1, inplace=True)
+    unrates.drop(["DATE"], axis=True, inplace=True)
     
     data["Date"] = pd.to_datetime(data.Date)
     data["year"] = data.Date.dt.year
@@ -452,118 +435,72 @@ def second_preprocessor(data):
     data.columns = ["text", "date", "year", "month", "unrate"]
     return data
 
-def word_magician(df, batch_size=50):
-    # Define a reduced set of stopwords and keywords
-    stops = ['the', 'a', 'and', 'is', 'of', 'to', 'for']
-    keywords = ["inflation", "recession", "risk"]
+def calculate_essential_features(text):
+    stops = set(['the', 'a', 'and', 'is', 'of', 'to', 'for'])
+    punctuations = set(string.punctuation)
+    
+    num_words = len(text.split())
+    num_unique_words = len(set(text.split()))
+    num_chars = len(text)
+    mean_word_len = np.mean([len(w) for w in text.split()]) if len(text.split()) > 0 else 0
+    
+    # Reduced feature set
+    return num_words, num_unique_words, num_chars, mean_word_len
 
-    # Initialize columns for text features
-    df["num_words"] = np.nan
-    df["num_unique_words"] = np.nan
-    df["num_chars"] = np.nan
-    df["num_stopwords"] = np.nan
-    df["num_punctuations"] = np.nan
-    df["num_words_upper"] = np.nan
-    df["mean_word_len"] = np.nan
-    df["inflation"] = np.nan
-    df["recession"] = np.nan
-    df["risk"] = np.nan
-
-    def process_batch(batch):
-        for index, row in batch.iterrows():
-            text = str(row["text"])
-            df.at[index, "num_words"] = len(text.split())
-            df.at[index, "num_unique_words"] = len(set(text.split()))
-            df.at[index, "num_chars"] = len(text)
-            df.at[index, "num_stopwords"] = len([w for w in text.lower().split() if w in stops])
-            df.at[index, "num_punctuations"] = len([c for c in text if c in string.punctuation])
-            df.at[index, "num_words_upper"] = len([w for w in text.split() if w.isupper()])
-            df.at[index, "mean_word_len"] = np.mean([len(w) for w in text.split()]) if len(text.split()) > 0 else 0
-
-            # Count occurrences of each keyword
-            for keyword in keywords:
-                df.at[index, keyword] = text.lower().count(keyword)
-
-    # Process the dataframe in batches
-    logging.info("Processing text features in batches.")
-    for i in range(0, len(df), batch_size):
-        batch = df.iloc[i:i + batch_size]
-        with ThreadPoolExecutor() as executor:
-            executor.submit(process_batch, batch)
-
-    # Drop rows where num_words is 0 (after processing)
-    df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
+# Parallel batch processing
+def process_batch(df_batch):
+    logging.info("Processing batch with %d records.", len(df_batch))
+    
+    # Apply the feature calculation function in parallel
+    with ThreadPoolExecutor() as executor:
+        results = list(executor.map(lambda text: calculate_essential_features(text), df_batch['text']))
+    
+    # Assign calculated features back to DataFrame
+    df_batch[['num_words', 'num_unique_words', 'num_chars', 'mean_word_len']] = results
     
     logging.info("Batch processing completed.")
+    return df_batch
+
+def word_magician(df, batch_size=1000):
+    df_batches = [df[i:i+batch_size] for i in range(0, len(df), batch_size)]
+    with ThreadPoolExecutor() as executor:
+        df_processed_batches = list(executor.map(process_batch, df_batches))
+    
+    df = pd.concat(df_processed_batches, ignore_index=True)
+    
+    # Drop rows where num_words is 0
+    df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
+    logging.info("Word magician function completed.")
+    
     return df
-
-# def word_magician(df):
-#     stops = ['the','a','an','and','but','if','or','because','as','what','which','this','that','these','those','then',
-#                   'just','so','than','such','both','through','about','for','is','of','while','during','to','What','Which',
-#                   'Is','If','While','This']
-#     punct = list(string.punctuation); punct.append("''"); punct.append(":"); punct.append("..."); punct.append("@")
-#     punct.append('""')
-#     df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
-#     df["num_unique_words"] = df["text"].apply(lambda x: len(set(str(x).split())))
-#     df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
-#     df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in stops]))
-#     df["num_punctuations"] =df['text'].apply(lambda x: len([c for c in str(x) if c in string.punctuation]) )
-#     df["num_words_upper"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.isupper()]))
-#     df["num_words_title"] = df["text"].apply(lambda x: len([w for w in str(x).split() if w.istitle()]))
-#     df["mean_word_len"] = df["text"].apply(lambda x: np.mean([len(w) for w in str(x).split()]))
-#     df = df.drop(df.loc[(df.num_words == 0)].index).reset_index(drop = True) # removing null rows
-#     keywords= ["inflation", "recession", "risk"]
-#     keyword_counts = {keyword: [] for keyword in keywords}
-
-#     # Iterate through the DataFrame
-#     for index, row in tqdm(df.iterrows()):
-#         text = row["text"]
-
-#         # Count occurrences of each keyword in the text text
-#         for keyword in keywords:
-#             keyword_count = text.lower().count(keyword)
-#             keyword_counts[keyword].append(keyword_count)
-#     # Add the keyword counts to the DataFrame
-#     for keyword in keywords:
-#         df[keyword] = keyword_counts[keyword]
-#     return df
 
 def feature_engineering_func(df):
     def get_textBlob_score(sent):
-      # This polarity score is between -1 to 1
-      polarity = TextBlob(sent).sentiment.polarity
-      return polarity
-    scores=[]
-    for i in tqdm(range(len(df['text']))):
-        score = get_textBlob_score(df['text'][i])
-        scores.append(score)
-    df["textblob_sentiment_score"] = scores
-    df = df.rename(columns = {"unrate" :"target"})
+        polarity = TextBlob(sent).sentiment.polarity
+        return polarity
+    
+    df["textblob_sentiment_score"] = df["text"].apply(get_textBlob_score)
+    df = df.rename(columns={"unrate": "target"})
     df["target_shift2"] = df.target.shift(2)
     df["target_shift4"] = df.target.shift(4)
     df["target_shift8"] = df.target.shift(8)
     df["target_shift12"] = df.target.shift(12)
 
-    df = df.loc[(df.target_shift12.notnull())].reset_index(drop = True)
-    df["target_rolling3"] = df.target.shift(2).rolling(window= 3).mean()
-    df["target_rolling2"] = df.target.shift(2).rolling(window= 2).mean()
-    df["target_rolling5"] = df.target.shift(2).rolling(window= 5).mean()
-    df["target_rolling7"] = df.target.shift(2).rolling(window= 7).mean()
-    df["target_rolling12"] = df.target.shift(2).rolling(window= 12).mean()
+    df = df.loc[(df.target_shift12.notnull())].reset_index(drop=True)
+    df["target_rolling3"] = df.target.shift(2).rolling(window=3).mean()
+    df["target_rolling2"] = df.target.shift(2).rolling(window=2).mean()
+    df["target_rolling5"] = df.target.shift(2).rolling(window=5).mean()
+    df["target_rolling7"] = df.target.shift(2).rolling(window=7).mean()
+    df["target_rolling12"] = df.target.shift(2).rolling(window=12).mean()
+    logging.info("Feature engineering completed.")
     return df
 
 """### Plotly Object"""
 
-
-import seaborn as sns
-import matplotlib.pyplot as plt
-import plotly.express as px
-import io
-import base64
-# app = dash.Dash(__name__)
 app = Dash(__name__)
 server = app.server
 import os
+
 app.layout = html.Div(style={'backgroundColor': 'white', 'padding': '20px'}, children=[
     html.H1(
         children='Unemployment Rate Predictor',
@@ -610,7 +547,6 @@ app.layout = html.Div(style={'backgroundColor': 'white', 'padding': '20px'}, chi
 
 def update_output(n_clicks, date_input, text_input):
     logging.info("Received callback with inputs: date_input=%s, text_input=%s", date_input, text_input)
-    output = html.Div('Performing some operation...')
     if n_clicks is not None:
         logging.info("Processing new input...")
         new_input = pd.DataFrame({"Date": [date_input], "Text": [text_input]})
@@ -620,52 +556,268 @@ def update_output(n_clicks, date_input, text_input):
         df2 = pd.concat([df, new_input], ignore_index=True)
         df2 = second_preprocessor(df2)
         logging.info("Second preprocessing completed.")
-        df2 = word_magician(df2)
-        logging.info("Word magician function completed.")
+        df2 = word_magician(df2, batch_size=1000)  # Increased batch size
         df2 = feature_engineering_func(df2)
-        logging.info("Feature engineering completed.")
-        df2.fillna(0, inplace = True)
+        df2.fillna(0, inplace=True)
 
         train = df2[:-1]
         last_month_unemployment_rate = train.iloc[-1].target
         test = df2[-1:]
-        X = train[['year', 'num_words', 'num_unique_words', 'num_chars', 'num_stopwords',
-       'num_punctuations', 'num_words_upper', 'num_words_title',
-       'mean_word_len', 'inflation', 'recession', 'risk', 'target_shift2',
-       'target_shift4', 'target_rolling3', 'target_rolling2']]
+        X = train[['year', 'num_words', 'num_unique_words', 'num_chars', 'mean_word_len', 
+                   'target_shift2', 'target_shift4', 'target_rolling3', 'target_rolling2']]
         y = train.target
         test_real = test[X.columns]
+        
         model = xgb.XGBRegressor(
-            objective='reg:squarederror',  # For regression
-            n_estimators=100,  # Number of boosting rounds
-            learning_rate=0.1,  # Step size shrinkage to prevent overfitting
-            max_depth=3  # Maximum depth of trees
+            objective='reg:squarederror',
+            n_estimators=50,  # Reduced number of trees
+            learning_rate=0.05,  # Slower learning rate
+            max_depth=2  # Shallower trees
         )
+        
         model.fit(X, y)
         preds = model.predict(test_real)[0]
         logging.info("Model prediction complete. Prediction: %s", preds)
-        preds = str(preds)[:4]
+        
         df2.loc[(df2.date == date_input), "target"] = float(preds)
         df2["fed_minutes_released_date"] = df2.year.astype(str) + "/" + df2.month.astype(str)
-        # Generate some example data for the line plot
-        df2 = df2.sort_values("date").reset_index(drop = True)
+        df2 = df2.sort_values("date").reset_index(drop=True)
         df_temp = df2[-10:]
-        df_temp = df_temp.rename(columns = {"target": "unemployment_rate_of_next_month"})
+        df_temp = df_temp.rename(columns={"target": "unemployment_rate_of_next_month"})
         fig = px.bar(df_temp, x="fed_minutes_released_date", y="unemployment_rate_of_next_month")
 
-        change = str(float(preds)-last_month_unemployment_rate)[:4]
-        return  html.Div([
+        change = str(float(preds) - last_month_unemployment_rate)[:4]
+        return html.Div([
             html.P(f'Unemployment rate prediction for next month is: {preds}%', style={'fontSize': '24px', 'textAlign': 'center'}),
             dcc.Graph(figure=fig)
         ])
-print("selamun aleykum")
-n_clicks = None
-"""### Link"""
 
 logging.info("Starting Dash app...")
 if __name__ == '__main__':
     app.run(host=os.getenv('IP', '0.0.0.0'),
-            port=int(os.getenv('PORT', 4000)), jupyter_mode= "external")
+            port=int(os.getenv('PORT', 4000)), jupyter_mode="external")
+
+
+
+
+# """### Preprocessing & Custom Functions"""
+
+# def initial_preprocesser(data):
+#   data = pd.read_csv("./data/scraped_data_all_years_true.csv")
+#   data.Date = data.Date.apply(lambda x : str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+#   data.Text = data.Text.apply(lambda x : str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+#   normal = data[24:]
+#   need_to_reverse = data[:24]
+#   need_to_reverse.columns = ["Text", "Date"]
+#   need_to_reverse = need_to_reverse[["Text", "Date"]]
+
+#   data = pd.concat([need_to_reverse, normal], ignore_index= True)
+#   return data
+
+# def second_preprocessor(data):
+#     # FRED API URL for unemployment rate data (UNRATE)
+#     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
+#     # # Reading the data directly from the URL
+#     unrates = pd.read_csv(url)
+    
+#     unrates.UNRATE = unrates.UNRATE.shift(-1)
+#     unrates["DATE"] = pd.to_datetime(unrates["DATE"])
+#     unrates["year"] = unrates.DATE.dt.year
+#     unrates["month"] = unrates.DATE.dt.month
+#     unrates = unrates.sort_values("DATE").reset_index(drop=True)
+#     unrates.drop(["DATE"], axis=1, inplace=True)
+    
+#     data["Date"] = pd.to_datetime(data.Date)
+#     data["year"] = data.Date.dt.year
+#     data["month"] = data.Date.dt.month
+#     data = data.sort_values("Date").reset_index(drop=True)
+#     data = data.merge(unrates, on=["year", "month"], how="left")
+#     data.columns = ["text", "date", "year", "month", "unrate"]
+#     return data
+
+# def word_magician(df, batch_size=50):
+#     # Define a reduced set of stopwords and keywords
+#     stops = ['the', 'a', 'and', 'is', 'of', 'to', 'for']
+#     keywords = ["inflation", "recession", "risk"]
+
+#     # Initialize columns for text features
+#     df["num_words"] = np.nan
+#     df["num_unique_words"] = np.nan
+#     df["num_chars"] = np.nan
+#     df["num_stopwords"] = np.nan
+#     df["num_punctuations"] = np.nan
+#     df["num_words_upper"] = np.nan
+#     df["mean_word_len"] = np.nan
+#     df["inflation"] = np.nan
+#     df["recession"] = np.nan
+#     df["risk"] = np.nan
+
+#     def process_batch(batch):
+#         for index, row in batch.iterrows():
+#             text = str(row["text"])
+#             df.at[index, "num_words"] = len(text.split())
+#             df.at[index, "num_unique_words"] = len(set(text.split()))
+#             df.at[index, "num_chars"] = len(text)
+#             df.at[index, "num_stopwords"] = len([w for w in text.lower().split() if w in stops])
+#             df.at[index, "num_punctuations"] = len([c for c in text if c in string.punctuation])
+#             df.at[index, "num_words_upper"] = len([w for w in text.split() if w.isupper()])
+#             df.at[index, "mean_word_len"] = np.mean([len(w) for w in text.split()]) if len(text.split()) > 0 else 0
+
+#             # Count occurrences of each keyword
+#             for keyword in keywords:
+#                 df.at[index, keyword] = text.lower().count(keyword)
+
+#     # Process the dataframe in batches
+#     logging.info("Processing text features in batches.")
+#     for i in range(0, len(df), batch_size):
+#         batch = df.iloc[i:i + batch_size]
+#         with ThreadPoolExecutor() as executor:
+#             executor.submit(process_batch, batch)
+
+#     # Drop rows where num_words is 0 (after processing)
+#     df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
+    
+#     logging.info("Batch processing completed.")
+#     return df
+
+# def feature_engineering_func(df):
+#     def get_textBlob_score(sent):
+#       # This polarity score is between -1 to 1
+#       polarity = TextBlob(sent).sentiment.polarity
+#       return polarity
+#     scores=[]
+#     for i in tqdm(range(len(df['text']))):
+#         score = get_textBlob_score(df['text'][i])
+#         scores.append(score)
+#     df["textblob_sentiment_score"] = scores
+#     df = df.rename(columns = {"unrate" :"target"})
+#     df["target_shift2"] = df.target.shift(2)
+#     df["target_shift4"] = df.target.shift(4)
+#     df["target_shift8"] = df.target.shift(8)
+#     df["target_shift12"] = df.target.shift(12)
+
+#     df = df.loc[(df.target_shift12.notnull())].reset_index(drop = True)
+#     df["target_rolling3"] = df.target.shift(2).rolling(window= 3).mean()
+#     df["target_rolling2"] = df.target.shift(2).rolling(window= 2).mean()
+#     df["target_rolling5"] = df.target.shift(2).rolling(window= 5).mean()
+#     df["target_rolling7"] = df.target.shift(2).rolling(window= 7).mean()
+#     df["target_rolling12"] = df.target.shift(2).rolling(window= 12).mean()
+#     return df
+
+# """### Plotly Object"""
+
+
+# import seaborn as sns
+# import matplotlib.pyplot as plt
+# import plotly.express as px
+# import io
+# import base64
+# # app = dash.Dash(__name__)
+# app = Dash(__name__)
+# server = app.server
+# import os
+# app.layout = html.Div(style={'backgroundColor': 'white', 'padding': '20px'}, children=[
+#     html.H1(
+#         children='Unemployment Rate Predictor',
+#         style={
+#             'textAlign': 'center',
+#             'color': '#0074e4',
+#             'fontSize': '36px'
+#         }
+#     ),
+#     html.Div(style={'textAlign': 'center'}, children=[
+#         html.Label('Enter Date:', style={'fontSize': '20px'}),
+#         dcc.Input(id='date-input', type='text', placeholder='Enter date (e.g., YYYYMMDD)', style={'fontSize': '18px', 'margin-right': '20px'}),
+
+#         html.Label('Enter FED Minutes Text:', style={'fontSize': '20px'}),
+#         dcc.Textarea(id='text-input', placeholder='Enter FED Minutes text...', style={'fontSize': '18px', 'margin-right': '20px',
+#                                                                                       "margin-bottom": -5}),
+#         html.Button('Submit', id='submit-button', style={'fontSize': '20px', 'backgroundColor': '#0074e4', 'color': 'white'}),
+#     ]),
+#     dcc.Loading(
+#         id="loading",
+#         type="default",
+#         children=[
+#             html.Div(
+#                 id='output-box',
+#                 style={
+#                     'backgroundColor': 'lightgreen',
+#                     'borderRadius': '10px',
+#                     'padding': '20px',
+#                     'textAlign': 'center',
+#                     'margin-top': '20px',
+#                     'fontSize': '24px',
+#                 },
+#             ),
+#         ],
+#     )
+# ])
+
+# @app.callback(
+#     Output('output-box', 'children'),
+#     Input('submit-button', 'n_clicks'),
+#     Input('date-input', 'value'),
+#     Input('text-input', 'value')
+# )
+
+# def update_output(n_clicks, date_input, text_input):
+#     logging.info("Received callback with inputs: date_input=%s, text_input=%s", date_input, text_input)
+#     output = html.Div('Performing some operation...')
+#     if n_clicks is not None:
+#         logging.info("Processing new input...")
+#         new_input = pd.DataFrame({"Date": [date_input], "Text": [text_input]})
+#         global df  # Declare df as a global variable to update it
+#         df = initial_preprocesser(df)
+#         logging.info("Initial preprocessing completed.")
+#         df2 = pd.concat([df, new_input], ignore_index=True)
+#         df2 = second_preprocessor(df2)
+#         logging.info("Second preprocessing completed.")
+#         df2 = word_magician(df2)
+#         logging.info("Word magician function completed.")
+#         df2 = feature_engineering_func(df2)
+#         logging.info("Feature engineering completed.")
+#         df2.fillna(0, inplace = True)
+
+#         train = df2[:-1]
+#         last_month_unemployment_rate = train.iloc[-1].target
+#         test = df2[-1:]
+#         X = train[['year', 'num_words', 'num_unique_words', 'num_chars', 'num_stopwords',
+#        'num_punctuations', 'num_words_upper', 'num_words_title',
+#        'mean_word_len', 'inflation', 'recession', 'risk', 'target_shift2',
+#        'target_shift4', 'target_rolling3', 'target_rolling2']]
+#         y = train.target
+#         test_real = test[X.columns]
+#         model = xgb.XGBRegressor(
+#             objective='reg:squarederror',  # For regression
+#             n_estimators=100,  # Number of boosting rounds
+#             learning_rate=0.1,  # Step size shrinkage to prevent overfitting
+#             max_depth=3  # Maximum depth of trees
+#         )
+#         model.fit(X, y)
+#         preds = model.predict(test_real)[0]
+#         logging.info("Model prediction complete. Prediction: %s", preds)
+#         preds = str(preds)[:4]
+#         df2.loc[(df2.date == date_input), "target"] = float(preds)
+#         df2["fed_minutes_released_date"] = df2.year.astype(str) + "/" + df2.month.astype(str)
+#         # Generate some example data for the line plot
+#         df2 = df2.sort_values("date").reset_index(drop = True)
+#         df_temp = df2[-10:]
+#         df_temp = df_temp.rename(columns = {"target": "unemployment_rate_of_next_month"})
+#         fig = px.bar(df_temp, x="fed_minutes_released_date", y="unemployment_rate_of_next_month")
+
+#         change = str(float(preds)-last_month_unemployment_rate)[:4]
+#         return  html.Div([
+#             html.P(f'Unemployment rate prediction for next month is: {preds}%', style={'fontSize': '24px', 'textAlign': 'center'}),
+#             dcc.Graph(figure=fig)
+#         ])
+# print("selamun aleykum")
+# n_clicks = None
+# """### Link"""
+
+# logging.info("Starting Dash app...")
+# if __name__ == '__main__':
+#     app.run(host=os.getenv('IP', '0.0.0.0'),
+#             port=int(os.getenv('PORT', 4000)), jupyter_mode= "external")
 
 
 
