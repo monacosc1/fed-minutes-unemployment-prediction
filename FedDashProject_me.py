@@ -63,6 +63,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 """### Preprocessing & Custom Functions"""
 
+# Load the initial dataset
+df = pd.read_csv("./data/scraped_data_all_years_true.csv")
+
 def initial_preprocesser(data):
     data = pd.read_csv("./data/scraped_data_all_years_true.csv")
     data.Date = data.Date.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
