@@ -43,30 +43,35 @@ def initial_preprocesser(file_path):
 def second_preprocessor(data):
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
     unrates = pd.read_csv(url)
-    
-    # Convert DATE to datetime and handle parsing errors
+
+    # Convert date columns to datetime
+    data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
     unrates['DATE'] = pd.to_datetime(unrates['DATE'], errors='coerce')
-    
-    # Check if there are any missing dates
-    if unrates['DATE'].isnull().any():
-        raise ValueError("Some dates could not be parsed in the UNRATE data.")
-    
-    unrates['year'] = unrates.DATE.dt.year
-    unrates['month'] = unrates.DATE.dt.month
+
+    # Extract year and month from dates
+    unrates['year'] = unrates['DATE'].dt.year
+    unrates['month'] = unrates['DATE'].dt.month
+
+    # Sort and shift UNRATE
     unrates = unrates.sort_values('DATE').reset_index(drop=True)
-    
-    # Shift the UNRATE values
     unrates['UNRATE'] = unrates['UNRATE'].shift(-1)
-    
-    # Merge with the main data
-    data['Date'] = pd.to_datetime(data.Date)
-    data['year'] = data.Date.dt.year
-    data['month'] = data.Date.dt.month
+
+    # Merge with the main dataset
+    data['year'] = data['Date'].dt.year
+    data['month'] = data['Date'].dt.month
     data = data.sort_values('Date').reset_index(drop=True)
-    data = data.merge(unrates[['year', 'month', 'UNRATE']], on=['year', 'month'], how='left')
-    data.columns = ["text", "date", "year", "month", "unrate"]
     
+    # Make sure you merge only the required columns from `unrates`
+    data = data.merge(unrates[['year', 'month', 'UNRATE']], on=['year', 'month'], how='left')
+
+    # Verify the number of columns before renaming
+    if data.shape[1] == 5:  # If it has the expected 5 columns
+        data.columns = ["text", "date", "year", "month", "unrate"]
+    else:
+        raise ValueError(f"Unexpected number of columns after merging: {data.shape[1]}")
+
     return data
+
 
 # Main Script
 st.title('Unemployment Rate Predictor')
