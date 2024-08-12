@@ -10,22 +10,32 @@ logging.basicConfig(level=logging.INFO)
 # Load data
 df = pd.read_csv("./data/scraped_data_all_years_true.csv")
 
-def initial_preprocesser(data):
-    data = pd.read_csv("./data/scraped_data_all_years_true.csv")
-    
-    # Ensure that 'Text' is in the expected columns
-    if 'Text' in data.columns:
+def initial_preprocesser(file_path):
+    try:
+        data = pd.read_csv(file_path)
+        if data.empty:
+            raise ValueError("The CSV file is empty. Please ensure it contains data.")
+        
+        if 'Text' not in data.columns:
+            raise ValueError("The 'Text' column is missing from the CSV file.")
+        
         data.Date = data.Date.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
         data.Text = data.Text.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+        
         normal = data[24:]
         need_to_reverse = data[:24]
         need_to_reverse.columns = ["Text", "Date"]
         need_to_reverse = need_to_reverse[["Text", "Date"]]
+        
         data = pd.concat([need_to_reverse, normal], ignore_index=True)
-    else:
-        raise ValueError("The 'Text' column is missing from the input data.")
-    
-    return data
+        return data
+
+    except pd.errors.EmptyDataError:
+        raise ValueError("No columns to parse from file. The CSV file might be empty or corrupted.")
+    except FileNotFoundError:
+        raise ValueError(f"The file {file_path} was not found.")
+    except Exception as e:
+        raise ValueError(f"An error occurred while processing the CSV file: {str(e)}")
 
 
 def second_preprocessor(data):
