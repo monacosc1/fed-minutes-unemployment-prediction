@@ -11,9 +11,22 @@ logging.basicConfig(level=logging.INFO)
 df = pd.read_csv("./data/scraped_data_all_years_true.csv")
 
 def initial_preprocesser(data):
-    data.Date = data.Date.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
-    data.Text = data.Text.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+    data = pd.read_csv("./data/scraped_data_all_years_true.csv")
+    
+    # Ensure that 'Text' is in the expected columns
+    if 'Text' in data.columns:
+        data.Date = data.Date.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+        data.Text = data.Text.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
+        normal = data[24:]
+        need_to_reverse = data[:24]
+        need_to_reverse.columns = ["Text", "Date"]
+        need_to_reverse = need_to_reverse[["Text", "Date"]]
+        data = pd.concat([need_to_reverse, normal], ignore_index=True)
+    else:
+        raise ValueError("The 'Text' column is missing from the input data.")
+    
     return data
+
 
 def second_preprocessor(data):
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
@@ -40,11 +53,16 @@ def second_preprocessor(data):
 
 
 def word_magician(df):
+    # Check if 'text' column exists
+    if 'text' not in df.columns:
+        raise ValueError("The DataFrame does not contain a 'text' column.")
+    
     df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
     df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
     df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in ['the', 'a', 'and', 'is', 'of', 'to', 'for']]))
     df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
     return df
+
 
 def feature_engineering_func(df):
     df["target_shift1"] = df.target.shift(1)
