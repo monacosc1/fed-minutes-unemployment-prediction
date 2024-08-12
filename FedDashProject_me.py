@@ -433,52 +433,19 @@ def second_preprocessor(data):
     data.columns = ["text", "date", "year", "month", "unrate"]
     return data
 
-def calculate_essential_features(text):
-    stops = set(['the', 'a', 'and', 'is', 'of', 'to', 'for'])
-    num_words = len(text.split())
-    num_unique_words = len(set(text.split()))
-    num_chars = len(text)
-    mean_word_len = np.mean([len(w) for w in text.split()]) if len(text.split()) > 0 else 0
-    return num_words, num_unique_words, num_chars, mean_word_len
-
-def process_batch(df_batch):
-    logging.info("Processing batch with %d records.", len(df_batch))
-    # Apply the feature calculation function in parallel
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(lambda text: calculate_essential_features(text), df_batch['text']))
-    # Assign calculated features back to DataFrame
-    df_batch[['num_words', 'num_unique_words', 'num_chars', 'mean_word_len']] = results
-    logging.info("Batch processing completed.")
-    return df_batch
-
-def word_magician(df, batch_size=2000):
-    df_batches = [df[i:i+batch_size] for i in range(0, len(df), batch_size)]
-    with ThreadPoolExecutor() as executor:
-        df_processed_batches = list(executor.map(process_batch, df_batches))
-    df = pd.concat(df_processed_batches, ignore_index=True)
+def word_magician(df):
+    df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
+    df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
+    df["num_stopwords"] = df["text"].apply(lambda x: len([w for w in str(x).lower().split() if w in ['the', 'a', 'and', 'is', 'of', 'to', 'for']]))
     df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
-    logging.info("Word magician function completed.")
     return df
 
 def feature_engineering_func(df):
-    def get_textBlob_score(sent):
-        polarity = TextBlob(sent).sentiment.polarity
-        return polarity
-    
-    df["textblob_sentiment_score"] = df["text"].apply(get_textBlob_score)
     df = df.rename(columns={"unrate": "target"})
+    df["target_shift1"] = df.target.shift(1)
     df["target_shift2"] = df.target.shift(2)
-    df["target_shift4"] = df.target.shift(4)
-    df["target_shift8"] = df.target.shift(8)
-    df["target_shift12"] = df.target.shift(12)
-
-    df = df.loc[(df.target_shift12.notnull())].reset_index(drop=True)
-    df["target_rolling3"] = df.target.shift(2).rolling(window=3).mean()
-    df["target_rolling2"] = df.target.shift(2).rolling(window=2).mean()
-    df["target_rolling5"] = df.target.shift(2).rolling(window=5).mean()
-    df["target_rolling7"] = df.target.shift(2).rolling(window=7).mean()
-    df["target_rolling12"] = df.target.shift(2).rolling(window=12).mean()
-    logging.info("Feature engineering completed.")
+    df["target_shift3"] = df.target.shift(3)
+    df = df.dropna().reset_index(drop=True)
     return df
 
 """### Plotly Object"""
@@ -542,24 +509,21 @@ def update_output(n_clicks, date_input, text_input):
         df2 = pd.concat([df, new_input], ignore_index=True)
         df2 = second_preprocessor(df2)
         logging.info("Second preprocessing completed.")
-        df2 = word_magician(df2, batch_size=2000)  # Further increased batch size
+        df2 = word_magician(df2)
+        logging.info("Word magician function completed.")
         df2 = feature_engineering_func(df2)
         df2.fillna(0, inplace=True)
 
         train = df2[:-1]
         last_month_unemployment_rate = train.iloc[-1].target
         test = df2[-1:]
-        X = train[['year', 'num_words', 'num_unique_words', 'num_chars', 'mean_word_len', 
-                   'target_shift2', 'target_shift4', 'target_rolling3', 'target_rolling2']]
+        X = train[['num_words', 'num_chars', 'num_stopwords', 'target_shift1', 'target_shift2']]
         y = train.target
         test_real = test[X.columns]
         
-        model = xgb.XGBRegressor(
-            objective='reg:squarederror',
-            n_estimators=25,  # Further reduced number of trees
-            learning_rate=0.05,  # Slower learning rate
-            max_depth=2  # Shallower trees
-        )
+        # Very simple linear regression model
+        from sklearn.linear_model import LinearRegression
+        model = LinearRegression()
         
         model.fit(X, y)
         preds = model.predict(test_real)[0]
@@ -580,6 +544,7 @@ def update_output(n_clicks, date_input, text_input):
 logging.info("Starting Dash app...")
 if __name__ == '__main__':
     app.run(host=os.getenv('IP', '0.0.0.0'), port=int(os.getenv('PORT', 4000)), jupyter_mode="external")
+
 
 
 
