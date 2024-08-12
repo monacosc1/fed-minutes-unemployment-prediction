@@ -61,22 +61,23 @@ def second_preprocessor(data):
     data['month'] = data['Date'].dt.month
     data = data.sort_values('Date').reset_index(drop=True)
 
-    # Print columns before merging
-    print("Columns before merging:", data.columns)
-
-    # Make sure you merge only the required columns from `unrates`
+    # Ensure no duplicate columns after merge
     data = data.merge(unrates[['year', 'month', 'UNRATE']], on=['year', 'month'], how='left')
 
-    # Print columns after merging
-    print("Columns after merging:", data.columns)
+    # Rename the columns properly after merging
+    data.rename(columns={
+        'Text': 'text',
+        'Date': 'date',
+        'UNRATE': 'unrate'
+    }, inplace=True)
 
-    # Verify the number of columns before renaming
-    if data.shape[1] == 5:  # If it has the expected 5 columns
-        data.columns = ["text", "date", "year", "month", "unrate"]
-    else:
-        raise ValueError(f"Unexpected number of columns after merging: {data.shape[1]}")
+    # If you still have extra columns, consider dropping them here
+    data = data[['text', 'date', 'year', 'month', 'unrate']]
 
     return data
+
+
+
 
 
 # Main Script
@@ -90,27 +91,17 @@ except ValueError as e:
     st.error(str(e))
     st.stop()
 
-# Continue processing if no errors
-try:
-    df = second_preprocessor(df)
-except ValueError as e:
-    st.error(str(e))
-    st.stop()
-
-# The rest of your code continues here, assuming df is now correctly loaded and preprocessed
-st.write("Data loaded and preprocessed successfully.")
-
-# Input fields for user input
+# Handle user input
 date_input = st.text_input('Enter Date (YYYYMMDD):', '')
 text_input = st.text_area('Enter FED Minutes Text:', '')
 
 if st.button('Submit'):
-    st.write(f"Received input: date_input={date_input}, text_input={text_input}")
+    logging.info(f"Received input: date_input={date_input}, text_input={text_input}")
     
     if date_input and text_input:
         new_input = pd.DataFrame({"Date": [date_input], "Text": [text_input]})
         
-        # The data is already preprocessed at this point, so no need to call initial_preprocesser(df) again
+        # Re-run preprocessors on the entire dataset
         df = pd.concat([df, new_input], ignore_index=True)
         df = second_preprocessor(df)
         df = word_magician(df)
@@ -133,13 +124,15 @@ if st.button('Submit'):
         df = df.sort_values("date").reset_index(drop=True)
         
         # Plot the last 10 data points plus the prediction
-        df_temp = df[-10:].append(df.iloc[[-1]], ignore_index=True)  # Include the new prediction
+        df_temp = df[-10:].append(df.iloc[-1])  # Include the new prediction
         df_temp = df_temp.rename(columns={"target": "unemployment_rate_of_next_month"})
         fig = px.bar(df_temp, x="fed_minutes_released_date", y="unemployment_rate_of_next_month")
 
         st.write(f'Unemployment rate prediction for next month is: {preds:.2f}%')
         st.plotly_chart(fig)
 
+
+        
 # import pandas as pd
 # import streamlit as st
 # import logging
