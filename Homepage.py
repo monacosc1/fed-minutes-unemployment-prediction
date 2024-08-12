@@ -18,19 +18,26 @@ def initial_preprocesser(data):
 def second_preprocessor(data):
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
     unrates = pd.read_csv(url)
-
-    unrates['DATE'] = pd.to_datetime(unrates['DATE'])
+    
+    # Convert UNRATE data to datetime
+    unrates['DATE'] = pd.to_datetime(unrates['DATE'], errors='coerce')
     unrates['year'] = unrates.DATE.dt.year
     unrates['month'] = unrates.DATE.dt.month
     unrates = unrates.sort_values('DATE').reset_index(drop=True)
     unrates['UNRATE'] = unrates['UNRATE'].shift(-1)
     
-    data['Date'] = pd.to_datetime(data.Date)
+    # Convert Date column to datetime
+    data['Date'] = pd.to_datetime(data.Date, errors='coerce')
+    
+    # Drop rows where Date couldn't be parsed
+    data = data.dropna(subset=['Date']).reset_index(drop=True)
+    
     data['year'] = data.Date.dt.year
     data['month'] = data.Date.dt.month
     data = data.merge(unrates[['year', 'month', 'UNRATE']], on=['year', 'month'], how='left')
     data = data.rename(columns={"UNRATE": "target"})
     return data
+
 
 def word_magician(df):
     df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
