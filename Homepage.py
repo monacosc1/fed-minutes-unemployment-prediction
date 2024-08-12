@@ -1,58 +1,29 @@
-import streamlit as st
 import pandas as pd
-import numpy as np
-import logging
-from sklearn.linear_model import LinearRegression
+import streamlit as st
 import plotly.express as px
+from sklearn.linear_model import LinearRegression
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-
-# Initial data loading function
+# Function to load and preprocess the initial data
 def initial_preprocesser(csv_file_path):
-    try:
-        data = pd.read_csv(csv_file_path)
-        data.Date = data.Date.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
-        data.Text = data.Text.apply(lambda x: str(x).replace('  ', ' ').replace('\r', '').replace('\n', ' '))
-        normal = data[24:]
-        need_to_reverse = data[:24]
-        need_to_reverse.columns = ["Text", "Date"]
-        need_to_reverse = need_to_reverse[["Text", "Date"]]
-        data = pd.concat([need_to_reverse, normal], ignore_index=True)
-        return data
-    except Exception as e:
-        raise ValueError(f"Error during initial preprocessing: {str(e)}")
+    data = pd.read_csv(csv_file_path)
+    data["Date"] = pd.to_datetime(data["Date"])
+    data["year"] = data["Date"].dt.year
+    data["month"] = data["Date"].dt.month
+    return data
 
-# Second preprocessing function
+# Function to load and preprocess the UNRATE data from the URL
 def second_preprocessor(data):
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
     unrates = pd.read_csv(url)
-
-    data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
-    unrates['DATE'] = pd.to_datetime(unrates['DATE'], errors='coerce')
-
-    unrates['year'] = unrates['DATE'].dt.year
-    unrates['month'] = unrates['DATE'].dt.month
-    unrates = unrates.sort_values('DATE').reset_index(drop=True)
-    unrates['UNRATE'] = unrates['UNRATE'].shift(-1)
-
-    data['year'] = data['Date'].dt.year
-    data['month'] = data['Date'].dt.month
-    data = data.sort_values('Date').reset_index(drop=True)
-
-    data = data.merge(unrates[['year', 'month', 'UNRATE']], on=['year', 'month'], how='left')
-
-    data.rename(columns={
-        'Text': 'text',
-        'Date': 'date',
-        'UNRATE': 'unrate'
-    }, inplace=True)
-
-    data = data[['text', 'date', 'year', 'month', 'unrate']]
-
+    unrates["DATE"] = pd.to_datetime(unrates["DATE"])
+    unrates["year"] = unrates["DATE"].dt.year
+    unrates["month"] = unrates["DATE"].dt.month
+    unrates = unrates[["year", "month", "UNRATE"]]
+    data = pd.merge(data, unrates, on=["year", "month"], how="left")
+    data = data.rename(columns={"UNRATE": "unrate", "Text": "text", "Date": "date"})
     return data
 
-# Word magician function
+# Function to calculate word features
 def word_magician(df):
     df["num_words"] = df["text"].apply(lambda x: len(str(x).split()))
     df["num_chars"] = df["text"].apply(lambda x: len(str(x)))
@@ -60,12 +31,12 @@ def word_magician(df):
     df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
     return df
 
-# Feature engineering function
+# Function to apply feature engineering
 def feature_engineering_func(df):
     df = df.rename(columns={"unrate": "target"})
-    df["target_shift1"] = df.target.shift(1)
-    df["target_shift2"] = df.target.shift(2)
-    df["target_shift3"] = df.target.shift(3)
+    df["target_shift1"] = df["target"].shift(1)
+    df["target_shift2"] = df["target"].shift(2)
+    df["target_shift3"] = df["target"].shift(3)
     df = df.dropna().reset_index(drop=True)
     return df
 
@@ -74,23 +45,16 @@ st.title('Unemployment Rate Predictor')
 
 # Load initial data
 csv_file_path = "./data/scraped_data_all_years_true.csv"
-try:
-    df = initial_preprocesser(csv_file_path)
-except ValueError as e:
-    st.error(str(e))
-    st.stop()
 
-# Handle user input
+df = initial_preprocesser(csv_file_path)
+df = second_preprocessor(df)
+
 date_input = st.text_input('Enter Date (YYYYMMDD):', '')
 text_input = st.text_area('Enter FED Minutes Text:', '')
 
 if st.button('Submit'):
-    logging.info(f"Received input: date_input={date_input}, text_input={text_input}")
-    
     if date_input and text_input:
-        new_input = pd.DataFrame({"Date": [date_input], "Text": [text_input]})
-        
-        # Re-run preprocessors on the entire dataset
+        new_input = pd.DataFrame({"Date": [pd.to_datetime(date_input)], "Text": [text_input]})
         df = pd.concat([df, new_input], ignore_index=True)
         df = second_preprocessor(df)
         df = word_magician(df)
@@ -101,7 +65,7 @@ if st.button('Submit'):
         train = df[:-1]
         test = df[-1:]
         X = train[['num_words', 'num_chars', 'num_stopwords', 'target_shift1', 'target_shift2']]
-        y = train.target
+        y = train["target"]
         test_real = test[X.columns]
 
         model = LinearRegression()
@@ -109,16 +73,20 @@ if st.button('Submit'):
         preds = model.predict(test_real)[0]
 
         df.loc[df.index[-1], "target"] = preds
-        df["fed_minutes_released_date"] = df.year.astype(str) + "/" + df.month.astype(str)
+        df["fed_minutes_released_date"] = df["year"].astype(str) + "/" + df["month"].astype(str)
         df = df.sort_values("date").reset_index(drop=True)
         
         # Plot the last 10 data points plus the prediction
-        df_temp = pd.concat([df[-10:], df.iloc[[-1]]])  # Include the new prediction
+        df_temp = df[-10:]
         df_temp = df_temp.rename(columns={"target": "unemployment_rate_of_next_month"})
         fig = px.bar(df_temp, x="fed_minutes_released_date", y="unemployment_rate_of_next_month")
 
         st.write(f'Unemployment rate prediction for next month is: {preds:.2f}%')
         st.plotly_chart(fig)
+
+
+
+
 
 
 
