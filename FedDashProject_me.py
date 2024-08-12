@@ -415,9 +415,7 @@ def initial_preprocesser(data):
     return data
 
 def second_preprocessor(data):
-    # FRED API URL for unemployment rate data (UNRATE)
     url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
-    # Reading the data directly from the URL
     unrates = pd.read_csv(url)
     
     unrates.UNRATE = unrates.UNRATE.shift(-1)
@@ -425,7 +423,7 @@ def second_preprocessor(data):
     unrates["year"] = unrates.DATE.dt.year
     unrates["month"] = unrates.DATE.dt.month
     unrates = unrates.sort_values("DATE").reset_index(drop=True)
-    unrates.drop(["DATE"], axis=True, inplace=True)
+    unrates.drop(["DATE"], axis=1, inplace=True)
     
     data["Date"] = pd.to_datetime(data.Date)
     data["year"] = data.Date.dt.year
@@ -437,41 +435,29 @@ def second_preprocessor(data):
 
 def calculate_essential_features(text):
     stops = set(['the', 'a', 'and', 'is', 'of', 'to', 'for'])
-    punctuations = set(string.punctuation)
-    
     num_words = len(text.split())
     num_unique_words = len(set(text.split()))
     num_chars = len(text)
     mean_word_len = np.mean([len(w) for w in text.split()]) if len(text.split()) > 0 else 0
-    
-    # Reduced feature set
     return num_words, num_unique_words, num_chars, mean_word_len
 
-# Parallel batch processing
 def process_batch(df_batch):
     logging.info("Processing batch with %d records.", len(df_batch))
-    
     # Apply the feature calculation function in parallel
     with ThreadPoolExecutor() as executor:
         results = list(executor.map(lambda text: calculate_essential_features(text), df_batch['text']))
-    
     # Assign calculated features back to DataFrame
     df_batch[['num_words', 'num_unique_words', 'num_chars', 'mean_word_len']] = results
-    
     logging.info("Batch processing completed.")
     return df_batch
 
-def word_magician(df, batch_size=1000):
+def word_magician(df, batch_size=2000):
     df_batches = [df[i:i+batch_size] for i in range(0, len(df), batch_size)]
     with ThreadPoolExecutor() as executor:
         df_processed_batches = list(executor.map(process_batch, df_batches))
-    
     df = pd.concat(df_processed_batches, ignore_index=True)
-    
-    # Drop rows where num_words is 0
     df = df.drop(df.loc[df.num_words == 0].index).reset_index(drop=True)
     logging.info("Word magician function completed.")
-    
     return df
 
 def feature_engineering_func(df):
@@ -556,7 +542,7 @@ def update_output(n_clicks, date_input, text_input):
         df2 = pd.concat([df, new_input], ignore_index=True)
         df2 = second_preprocessor(df2)
         logging.info("Second preprocessing completed.")
-        df2 = word_magician(df2, batch_size=1000)  # Increased batch size
+        df2 = word_magician(df2, batch_size=2000)  # Further increased batch size
         df2 = feature_engineering_func(df2)
         df2.fillna(0, inplace=True)
 
@@ -570,7 +556,7 @@ def update_output(n_clicks, date_input, text_input):
         
         model = xgb.XGBRegressor(
             objective='reg:squarederror',
-            n_estimators=50,  # Reduced number of trees
+            n_estimators=25,  # Further reduced number of trees
             learning_rate=0.05,  # Slower learning rate
             max_depth=2  # Shallower trees
         )
@@ -585,17 +571,15 @@ def update_output(n_clicks, date_input, text_input):
         df_temp = df2[-10:]
         df_temp = df_temp.rename(columns={"target": "unemployment_rate_of_next_month"})
         fig = px.bar(df_temp, x="fed_minutes_released_date", y="unemployment_rate_of_next_month")
-
-        change = str(float(preds) - last_month_unemployment_rate)[:4]
+        
         return html.Div([
-            html.P(f'Unemployment rate prediction for next month is: {preds}%', style={'fontSize': '24px', 'textAlign': 'center'}),
+            html.P(f'Unemployment rate prediction for next month is: {preds:.2f}%', style={'fontSize': '24px', 'textAlign': 'center'}),
             dcc.Graph(figure=fig)
         ])
 
 logging.info("Starting Dash app...")
 if __name__ == '__main__':
-    app.run(host=os.getenv('IP', '0.0.0.0'),
-            port=int(os.getenv('PORT', 4000)), jupyter_mode="external")
+    app.run(host=os.getenv('IP', '0.0.0.0'), port=int(os.getenv('PORT', 4000)), jupyter_mode="external")
 
 
 
