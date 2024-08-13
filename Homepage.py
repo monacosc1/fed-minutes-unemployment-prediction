@@ -139,28 +139,21 @@ def preprocess_data(statements, unrates):
 
 # Function to extract features from text
 def extract_features(df):
-    # Basic Textual Features
     df['num_words'] = df['Statement'].apply(lambda x: len(x.split()))
     df['num_chars'] = df['Statement'].apply(lambda x: len(x))
     df['num_sentences'] = df['Statement'].apply(lambda x: len(x.split('.')))
     df['avg_word_length'] = df['Statement'].apply(lambda x: np.mean([len(word) for word in x.split()]))
-    
-    # Sentiment Analysis
     df['polarity'] = df['Statement'].apply(lambda x: TextBlob(x).sentiment.polarity)
     df['subjectivity'] = df['Statement'].apply(lambda x: TextBlob(x).sentiment.subjectivity)
     
-    # Specific Word Counts
     key_terms = ['inflation', 'employment', 'growth', 'unemployment', 'rate']
     for term in key_terms:
         df[f'count_{term}'] = df['Statement'].apply(lambda x: x.lower().split().count(term))
     
-    # N-grams (using Bigrams as an example)
     global vectorizer
     vectorizer = CountVectorizer(ngram_range=(2, 2))
     ngram_matrix = vectorizer.fit_transform(df['Statement'])
     ngram_df = pd.DataFrame(ngram_matrix.toarray(), columns=vectorizer.get_feature_names_out())
-    
-    # Concatenate the N-gram features with the original dataframe
     df = pd.concat([df, ngram_df], axis=1)
     
     return df
@@ -195,15 +188,12 @@ date_input = st.text_input('Enter Date (YYYYMMDD):', '')
 text_input = st.text_area('Enter FED Minutes Text:', '')
 
 if st.button('Submit'):
-    # Load and preprocess data
     statements_df = load_fomc_statements()
     cleaned_statements_df = clean_statements_df(statements_df)
     unrates_df = load_unrates()
     data = preprocess_data(cleaned_statements_df, unrates_df)
 
     # Fit the CountVectorizer based on the training data
-    global vectorizer
-    vectorizer = CountVectorizer(ngram_range=(2, 2))
     vectorizer.fit(data['Statement'])
     data = extract_features(data)
 
@@ -213,6 +203,8 @@ if st.button('Submit'):
     # Predict the next month's unemployment rate
     new_data = pd.DataFrame({"Statement": [text_input]})
     new_data = extract_features(new_data)
+    
+    # Align features between training data and new data
     X_new = new_data[data.drop(columns=['next_month_unrate', 'Statement', 'Date', 'year', 'month']).columns]
     prediction = model.predict(X_new)[0]
 
@@ -224,7 +216,6 @@ if st.button('Submit'):
     unrates_df['Date'] = pd.to_datetime(unrates_df[['year', 'month']].assign(day=1))
     fig = px.bar(unrates_df[-10:], x='Date', y='UNRATE', title='Unemployment Rate Over Time')
     st.plotly_chart(fig)
-
 
 
 
