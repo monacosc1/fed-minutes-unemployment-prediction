@@ -13,6 +13,9 @@ from urllib.parse import urljoin
 import re
 from datetime import datetime
 
+# Global variable for the CountVectorizer
+vectorizer = CountVectorizer(ngram_range=(2, 2))
+
 # Function to scrape or load FOMC statements
 def load_fomc_statements():
     url = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
@@ -139,33 +142,20 @@ def preprocess_data(statements, unrates):
 
 # Function to extract features from text
 def extract_features(df):
-    # Basic Textual Features
     df['num_words'] = df['Statement'].apply(lambda x: len(x.split()))
     df['num_chars'] = df['Statement'].apply(lambda x: len(x))
     df['num_sentences'] = df['Statement'].apply(lambda x: len(x.split('.')))
     df['avg_word_length'] = df['Statement'].apply(lambda x: np.mean([len(word) for word in x.split()]))
-    
-    # Sentiment Analysis
     df['polarity'] = df['Statement'].apply(lambda x: TextBlob(x).sentiment.polarity)
     df['subjectivity'] = df['Statement'].apply(lambda x: TextBlob(x).sentiment.subjectivity)
-    
-    # Specific Word Counts
-    key_terms = ['inflation', 'employment', 'growth', 'unemployment', 'rate']
-    for term in key_terms:
-        df[f'count_{term}'] = df['Statement'].apply(lambda x: x.lower().split().count(term))
-    
-    # Stopword Count
-    stopwords_list = ['the', 'a', 'and', 'is', 'of', 'to', 'for']  # You can expand this list as needed
+    stopwords_list = ['the', 'a', 'and', 'is', 'of', 'to', 'for']
     df['num_stopwords'] = df['Statement'].apply(lambda x: len([w for w in x.lower().split() if w in stopwords_list]))
     
-    # N-grams (using Bigrams as an example)
-    vectorizer = CountVectorizer(ngram_range=(2, 2))
-    ngram_matrix = vectorizer.fit_transform(df['Statement'])
+    # N-grams (using the same vectorizer globally)
+    ngram_matrix = vectorizer.transform(df['Statement'])
     ngram_df = pd.DataFrame(ngram_matrix.toarray(), columns=vectorizer.get_feature_names_out())
     
-    # Concatenate the N-gram features with the original dataframe
     df = pd.concat([df, ngram_df], axis=1)
-    
     return df
 
 # Function to train the model
@@ -205,14 +195,27 @@ if st.button('Submit'):
     data = preprocess_data(cleaned_statements_df, unrates_df)
     data = extract_features(data)
 
+    # Fit the CountVectorizer based on the training data
+    global vectorizer
+    vectorizer.fit(data['Statement'])
+    data = extract_features(data)
+
     # Train the model
     model = train_model(data)
 
     # Predict the next month's unemployment rate
     new_data = pd.DataFrame({"Statement": [text_input]})
     new_data = extract_features(new_data)
-    X_new = new_data[data.drop(columns=['next_month_unrate', 'Statement', 'Date', 'year', 'month']).columns]
-    prediction = model.predict(X_new)[0]
+
+    # Align columns between the training data and new data
+    missing_cols = set(data.columns) - set(new_data.columns)
+    for c in missing_cols:
+        new_data[c] = 0
+    new_data = new_data[data.drop(columns=['next_month_unrate', 'Statement', 'Date', 'year', 'month']).columns]
+    
+    prediction = model.predict(new_data)[0]
+    # X_new = new_data[data.drop(columns=['next_month_unrate', 'Statement', 'Date', 'year', 'month']).columns]
+    # prediction = model.predict(X_new)[0]
 
     # Display the prediction and plot the results
     st.write(f'Unemployment rate prediction for next month is: {prediction:.2f}%')
