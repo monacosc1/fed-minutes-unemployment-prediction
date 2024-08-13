@@ -154,6 +154,10 @@ def extract_features(df):
     for term in key_terms:
         df[f'count_{term}'] = df['Statement'].apply(lambda x: x.lower().split().count(term))
     
+    # Stopword Count
+    stopwords_list = ['the', 'a', 'and', 'is', 'of', 'to', 'for']  # You can expand this list as needed
+    df['num_stopwords'] = df['Statement'].apply(lambda x: len([w for w in x.lower().split() if w in stopwords_list]))
+    
     # N-grams (using Bigrams as an example)
     vectorizer = CountVectorizer(ngram_range=(2, 2))
     ngram_matrix = vectorizer.fit_transform(df['Statement'])
@@ -207,7 +211,7 @@ if st.button('Submit'):
     # Predict the next month's unemployment rate
     new_data = pd.DataFrame({"Statement": [text_input]})
     new_data = extract_features(new_data)
-    X_new = new_data[['num_words', 'num_chars', 'num_stopwords']]
+    X_new = new_data[data.drop(columns=['next_month_unrate', 'Statement', 'Date', 'year', 'month']).columns]
     prediction = model.predict(X_new)[0]
 
     # Display the prediction and plot the results
