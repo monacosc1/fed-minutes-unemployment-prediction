@@ -138,25 +138,32 @@ def preprocess_data(statements, unrates):
     return merged_data
 
 # Function to extract features from text
+# Function to extract features from text
 def extract_features(df):
+    # Basic Textual Features
     df['num_words'] = df['Statement'].apply(lambda x: len(x.split()))
     df['num_chars'] = df['Statement'].apply(lambda x: len(x))
     df['num_sentences'] = df['Statement'].apply(lambda x: len(x.split('.')))
     df['avg_word_length'] = df['Statement'].apply(lambda x: np.mean([len(word) for word in x.split()]))
+    
+    # Sentiment Analysis
     df['polarity'] = df['Statement'].apply(lambda x: TextBlob(x).sentiment.polarity)
     df['subjectivity'] = df['Statement'].apply(lambda x: TextBlob(x).sentiment.subjectivity)
     
+    # Specific Word Counts
     key_terms = ['inflation', 'employment', 'growth', 'unemployment', 'rate']
     for term in key_terms:
         df[f'count_{term}'] = df['Statement'].apply(lambda x: x.lower().split().count(term))
     
-    global vectorizer
-    vectorizer = CountVectorizer(ngram_range=(2, 2))
-    ngram_matrix = vectorizer.fit_transform(df['Statement'])
+    # N-grams (using Bigrams as an example)
+    ngram_matrix = vectorizer.transform(df['Statement'])  # Apply the vectorizer fitted earlier
     ngram_df = pd.DataFrame(ngram_matrix.toarray(), columns=vectorizer.get_feature_names_out())
+    
+    # Concatenate the N-gram features with the original dataframe
     df = pd.concat([df, ngram_df], axis=1)
     
     return df
+
 
 # Function to train the model
 def train_model(data):
@@ -187,14 +194,18 @@ st.title('Unemployment Rate Predictor')
 date_input = st.text_input('Enter Date (YYYYMMDD):', '')
 text_input = st.text_area('Enter FED Minutes Text:', '')
 
+# Initialize the vectorizer
+vectorizer = CountVectorizer(ngram_range=(2, 2))
+
 if st.button('Submit'):
+    # Load and preprocess data
     statements_df = load_fomc_statements()
     cleaned_statements_df = clean_statements_df(statements_df)
     unrates_df = load_unrates()
     data = preprocess_data(cleaned_statements_df, unrates_df)
 
     # Fit the CountVectorizer based on the training data
-    vectorizer.fit(data['Statement'])
+    vectorizer.fit(data['Statement'])  # Fit the vectorizer here
     data = extract_features(data)
 
     # Train the model
@@ -203,7 +214,7 @@ if st.button('Submit'):
     # Predict the next month's unemployment rate
     new_data = pd.DataFrame({"Statement": [text_input]})
     new_data = extract_features(new_data)
-    
+
     # Align features between training data and new data
     X_new = new_data[data.drop(columns=['next_month_unrate', 'Statement', 'Date', 'year', 'month']).columns]
     prediction = model.predict(X_new)[0]
