@@ -1,19 +1,38 @@
-# fed-minutes-unemployment-prediction
-Predicting Next Month's Unemployment Rate Based on the Text of the Latest Federal Reserve Meeting Minutes
+# Predicting Unemployment from FOMC Statements
 
-## Use of:
-* **Jupyter Notebook** 2023.03.0-daily+82.pro2
-    * **Main Packages used:** pandas, numpy, statsmodels,
-    matplotlib
+NLP-based model that extracts features from Federal Reserve policy statements to predict the next month's unemployment rate, deployed as a Streamlit web app.
 
-# Overview
-## Key Findings
+## Key Finding
 
-### Predictor Importance
-![alt text](https://github.com/monacosc1/nfl-tackles/blob/master/reports/Predictor%20Importance.png) 
+![Unemployment Rate History](charts/fed-minutes-fig1-unemployment-rate-history.png)
 
-### Success Tackle Speed & Acceleration
-![alt text](https://github.com/monacosc1/nfl-tackles/blob/master/reports/Advanced%20Visualizations/Successful%20Tackle%20Speed%20and%20Acceleration.png) 
+*Historical U.S. unemployment rate showing the cyclical patterns the model aims to predict from FOMC statement text.*
 
-### Missed Tackle Position
-![alt text](https://github.com/monacosc1/nfl-tackles/blob/master/reports/Advanced%20Visualizations/Missed%20Tackle%20Position.png) 
+## Overview
+
+Federal Reserve meeting minutes contain forward-looking language that reflects the committee's assessment of labor market conditions. This project uses natural language processing to extract sentiment scores and word count features from FOMC statements, then trains a regression model to predict the following month's unemployment rate. The model achieves a mean absolute error of 0.49 percentage points, demonstrating that Fed communications carry meaningful predictive signal for labor market outcomes.
+
+## Tools & Technologies
+
+- Python
+- Pandas
+- scikit-learn
+- NLTK
+- Streamlit
+- Matplotlib
+
+## Results
+
+FOMC statement sentiment and word count features predict the unemployment rate with a MAE of 0.49 percentage points:
+
+![Prediction Accuracy](charts/fed-minutes-fig4-prediction-accuracy.png)
+
+*Model predictions vs. actual unemployment rate, showing close tracking across both stable and volatile periods.*
+
+## Live App
+
+Try the interactive prediction tool: [Streamlit App](https://fed-minutes-unemployment-prediction-dg3k7ksudiphejwegmb4ja.streamlit.app/)
+
+## View Full Analysis
+
+For the complete writeup with all charts and methodology, visit the [project page on scottmonaco.com](https://scottmonaco.com/fed-minutes).
