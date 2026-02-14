@@ -41,7 +41,7 @@ Eight candidate models were evaluated using time-series cross-validation (no fut
 
 ## Live App
 
-Try the interactive prediction tool: [Streamlit App](https://fed-minutes-unemployment-prediction-dg3k7ksudiphejwegmb4ja.streamlit.app/)
+Try the interactive prediction tool: [Streamlit App](https://fed-minutes-unemployment-prediction-rickktxnebksxjeeuz3b64.streamlit.app/)
 
 ---
 

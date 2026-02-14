@@ -7,7 +7,10 @@ from sklearn.ensemble import (
     GradientBoostingRegressor,
     VotingRegressor,
 )
-from xgboost import XGBRegressor
+try:
+    from xgboost import XGBRegressor
+except ImportError:
+    XGBRegressor = None
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, cross_val_score
 
 from src.config import CV_N_SPLITS
@@ -40,11 +43,12 @@ def get_candidate_models():
             GradientBoostingRegressor(random_state=42, n_estimators=100),
             {"max_depth": [2, 3], "learning_rate": [0.05, 0.1]},
         ),
-        "XGBoost": (
+    }
+    if XGBRegressor is not None:
+        models["XGBoost"] = (
             XGBRegressor(random_state=42, n_estimators=100, verbosity=0),
             {"max_depth": [2, 3], "learning_rate": [0.05, 0.1], "reg_alpha": [1.0, 10.0]},
-        ),
-    }
+        )
 
 
 def run_model_selection(X_train, y_train):
