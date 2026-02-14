@@ -31,3 +31,4 @@ Thumbs.db
 *.log
 push_to_github.bat
 .ipynb_checkpoints/
+.claude/
