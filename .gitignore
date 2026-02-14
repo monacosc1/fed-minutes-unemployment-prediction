@@ -1,4 +1,33 @@
-.ipynb_checkpoints/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+venv/
+env/
+.pytest_cache/
 
+# Data (regenerate with: python policy_minutes_scrape.py)
+data/*.csv
+
+# Model artifacts are committed to git (small files, needed by Streamlit Cloud)
+# Regenerate with: python train.py
+
+# Secrets and environment
+.env
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
 push_to_github.bat
-# /data/
+.ipynb_checkpoints/

@@ -1,0 +1,89 @@
+{
+  "best_model": "Lasso",
+  "best_params": {
+    "alpha": 0.01
+  },
+  "n_features": 77,
+  "n_training_samples": 229,
+  "training_period": {
+    "start": "1993-02-03",
+    "end": "2024-06-12"
+  },
+  "test_metrics": {
+    "mae": 0.6082593220134683,
+    "rmse": 1.7957386072419055,
+    "r2": 0.49618166019302323,
+    "mape": 7.209747786455933
+  },
+  "walk_forward_metrics": {
+    "mae": 0.6082593220134683,
+    "rmse": 1.7957386072419055,
+    "r2": 0.49618166019302323,
+    "mape": 7.209747786455933
+  },
+  "model_comparison": [
+    {
+      "name": "Lasso",
+      "cv_mae": 0.6005,
+      "best_params": {
+        "alpha": 0.01
+      }
+    },
+    {
+      "name": "Ensemble_Top3",
+      "cv_mae": 0.6355,
+      "best_params": {
+        "components": [
+          "Lasso",
+          "XGBoost",
+          "GradientBoosting"
+        ]
+      }
+    },
+    {
+      "name": "XGBoost",
+      "cv_mae": 0.6763,
+      "best_params": {
+        "learning_rate": 0.05,
+        "max_depth": 3,
+        "reg_alpha": 1.0
+      }
+    },
+    {
+      "name": "GradientBoosting",
+      "cv_mae": 0.6787,
+      "best_params": {
+        "learning_rate": 0.1,
+        "max_depth": 3
+      }
+    },
+    {
+      "name": "RandomForest",
+      "cv_mae": 0.6948,
+      "best_params": {
+        "max_depth": 3,
+        "min_samples_leaf": 5
+      }
+    },
+    {
+      "name": "Ridge",
+      "cv_mae": 0.6991,
+      "best_params": {
+        "alpha": 1.0
+      }
+    },
+    {
+      "name": "ElasticNet",
+      "cv_mae": 0.98,
+      "best_params": {
+        "alpha": 0.1,
+        "l1_ratio": 0.3
+      }
+    },
+    {
+      "name": "LinearRegression",
+      "cv_mae": 1.5737,
+      "best_params": {}
+    }
+  ]
+}
